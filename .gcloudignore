@@ -1,0 +1,31 @@
+# Git files
+.git/
+.gitignore
+
+# Dependencies (will be installed in Docker)
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build output (will be generated in Docker)
+dist/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Claude files
+.claude/ 

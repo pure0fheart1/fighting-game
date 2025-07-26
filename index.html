@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Fighting Game</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="game-wrapper">
+        <h1>Browser Brawl</h1>
+        <div class="ui-top">
+            <div class="player-info">
+                <div class="health-bar">
+                    <div class="health-fill" id="player1-health"></div>
+                </div>
+                <span>Player 1</span>
+            </div>
+            <div class="round-info">Round 1</div>
+            <div class="player-info">
+                <div class="health-bar">
+                    <div class="health-fill" id="player2-health"></div>
+                </div>
+                <span>Player 2</span>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="controls">
+            <div class="control-section">
+                <h3>Player 1 (Red)</h3>
+                <p>Move: A/D | Jump: W | Attack: Space</p>
+            </div>
+            <div class="control-section">
+                <h3>Player 2 (Blue)</h3>
+                <p>Move: ←/→ | Jump: ↑ | Attack: Enter</p>
+            </div>
+        </div>
+        <div id="game-message" class="game-message hidden"></div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

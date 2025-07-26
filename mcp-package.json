@@ -1,0 +1,12 @@
+{
+  "name": "cloudbuild-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Google Cloud Build operations",
+  "main": "mcp-cloudbuild.js",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0"
+  },
+  "bin": {
+    "cloudbuild-mcp": "./mcp-cloudbuild.js"
+  }
+}

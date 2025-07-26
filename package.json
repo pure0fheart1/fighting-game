@@ -1,0 +1,19 @@
+{
+  "name": "browser-fighting-game",
+  "version": "1.0.0",
+  "description": "A simple browser-based fighting game",
+  "main": "index.html",
+  "engines": {
+    "node": "18"
+  },
+  "scripts": {
+    "start": "npx serve -s . -l ${PORT:-8080}",
+    "dev": "npx serve -s . -l 3000"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  },
+  "keywords": ["game", "fighting", "browser", "html5", "canvas"],
+  "author": "Browser Brawl",
+  "license": "MIT"
+}

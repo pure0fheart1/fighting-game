@@ -1,0 +1,20 @@
+steps:
+  # Deploy directly to Cloud Run from source
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'deploy', 'browser-fighting-game',
+      '--source', '.',
+      '--region', 'us-central1',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--port', '8080',
+      '--memory', '512Mi',
+      '--cpu', '1'
+    ]
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+# Build timeout
+timeout: '1200s'
