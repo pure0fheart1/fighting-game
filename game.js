@@ -9,7 +9,9 @@ class Game {
         // Game state
         this.gameState = 'playing'; // 'playing', 'paused', 'gameOver'
         this.round = 1;
-        this.gameTime = 99;
+        this.roundDurationSeconds = 60;
+        this.timeRemainingSeconds = this.roundDurationSeconds;
+        this.gameTime = 99; // legacy; not used directly anymore
         
         // Platform setup
         this.platforms = [
@@ -22,6 +24,12 @@ class Game {
         // Initialize players
         this.player1 = new Player(200, 500, '#ff4444', 'player1');
         this.player2 = new Player(600, 500, '#4444ff', 'player2');
+        
+        // Effects (particles, flashes)
+        this.effects = [];
+        
+        // Simple audio context for hit sounds (lazy-init)
+        this.audioCtx = null;
         
         // Controls
         this.keys = {};
@@ -36,13 +44,19 @@ class Game {
         this.player1HealthBar = document.getElementById('player1-health');
         this.player2HealthBar = document.getElementById('player2-health');
         this.gameMessage = document.getElementById('game-message');
+        this.roundInfoEl = document.querySelector('.round-info');
     }
     
     setupControls() {
         window.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
-            if (e.code === 'Space' || e.code === 'Enter') {
+            // Prevent scrolling with space/enter/arrow keys during gameplay
+            if (['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
                 e.preventDefault();
+            }
+            // Pause/Resume
+            if (e.code === 'Escape') {
+                this.togglePause();
             }
         });
         
@@ -52,7 +66,7 @@ class Game {
     }
     
     gameLoop(currentTime) {
-        const deltaTime = currentTime - this.lastTime;
+        const deltaTime = this.lastTime === 0 ? 16 : (currentTime - this.lastTime);
         this.lastTime = currentTime;
         
         if (this.gameState === 'playing') {
@@ -64,14 +78,33 @@ class Game {
     }
     
     update(deltaTime) {
+        // deltaTime in ms
+        const dtSeconds = deltaTime / 1000;
+        
         // Update players
-        this.player1.update(deltaTime, this.keys, this.platforms);
-        this.player2.update(deltaTime, this.keys, this.platforms);
+        this.player1.update(deltaTime, this.keys, this.platforms, this.player2);
+        this.player2.update(deltaTime, this.keys, this.platforms, this.player1);
         
         // Handle attacks
         this.handleAttacks();
         
-        // Check for game over
+        // Update effects
+        this.updateEffects(dtSeconds);
+        
+        // Countdown timer
+        this.timeRemainingSeconds = Math.max(0, this.timeRemainingSeconds - dtSeconds);
+        if (this.timeRemainingSeconds <= 0) {
+            // Time up: determine winner by health
+            if (this.player1.health === this.player2.health) {
+                this.endGame('Draw!');
+            } else if (this.player1.health > this.player2.health) {
+                this.endGame('Time! Player 1 Wins!');
+            } else {
+                this.endGame('Time! Player 2 Wins!');
+            }
+        }
+        
+        // Check for game over (health)
         this.checkGameOver();
         
         // Update UI
@@ -79,41 +112,134 @@ class Game {
     }
     
     handleAttacks() {
-        // Player 1 attack
-        if (this.keys.Space && this.player1.canAttack()) {
-            this.player1.attack();
-            if (this.isPlayerInRange(this.player1, this.player2)) {
-                this.player2.takeDamage(15);
-                this.createHitEffect(this.player2.x, this.player2.y);
+        const tryAttack = (attacker, target, attackKey) => {
+            if (this.keys[attackKey] && attacker.canAttack()) {
+                attacker.attack();
+                if (this.isPlayerInRange(attacker, target)) {
+                    // Damage calculation with blocking
+                    const baseDamage = 15;
+                    const targetBlocking = target.isBlocking;
+                    const damage = targetBlocking ? Math.ceil(baseDamage * 0.3) : baseDamage;
+                    target.takeDamage(damage);
+                    
+                    // Knockback
+                    const direction = attacker.getFacingDirectionRelativeTo(target);
+                    const kbX = targetBlocking ? 120 : 220;
+                    const kbY = targetBlocking ? 150 : 250;
+                    target.applyKnockback(direction, kbX, kbY);
+                    
+                    // Hit stun
+                    const stunMs = targetBlocking ? 120 : 220;
+                    target.startStun(stunMs);
+                    
+                    // Effects + sound
+                    this.createHitEffect(target.x + target.width / 2, target.y + target.height / 2);
+                    this.playHitSound();
+                }
             }
-        }
+        };
         
-        // Player 2 attack
-        if (this.keys.Enter && this.player2.canAttack()) {
-            this.player2.attack();
-            if (this.isPlayerInRange(this.player2, this.player1)) {
-                this.player1.takeDamage(15);
-                this.createHitEffect(this.player1.x, this.player1.y);
-            }
-        }
+        // Player 1 attack (Space)
+        tryAttack(this.player1, this.player2, 'Space');
+        // Player 2 attack (Enter)
+        tryAttack(this.player2, this.player1, 'Enter');
     }
     
     isPlayerInRange(attacker, target) {
-        const distance = Math.abs(attacker.x - target.x);
-        return distance < 60 && Math.abs(attacker.y - target.y) < 50;
+        // Directional hitbox in front of attacker
+        const attackRange = 50;
+        const verticalTolerance = 60;
+        const facing = attacker.facing;
+        
+        const hitbox = {
+            x: facing === 'right' ? attacker.x + attacker.width : attacker.x - attackRange,
+            y: attacker.y,
+            width: attackRange,
+            height: attacker.height,
+        };
+        
+        // Expand slightly vertically
+        hitbox.y -= 10;
+        hitbox.height += 20;
+        
+        const targetBox = { x: target.x, y: target.y, width: target.width, height: target.height };
+        
+        const overlap = !(hitbox.x + hitbox.width < targetBox.x ||
+                          hitbox.x > targetBox.x + targetBox.width ||
+                          hitbox.y + hitbox.height < targetBox.y ||
+                          hitbox.y > targetBox.y + targetBox.height);
+        
+        // Also check vertical difference to avoid hits across big height gaps
+        const verticalOk = Math.abs((attacker.y + attacker.height/2) - (target.y + target.height/2)) < verticalTolerance;
+        
+        return overlap && verticalOk;
     }
     
     createHitEffect(x, y) {
-        // Simple hit effect - could be enhanced with particles
-        this.ctx.save();
-        this.ctx.fillStyle = '#ffff00';
-        this.ctx.strokeStyle = '#ff0000';
-        this.ctx.lineWidth = 3;
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, 25, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-        this.ctx.restore();
+        // Particle burst
+        const particleCount = 10;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2) * (i / particleCount);
+            const speed = 120 + Math.random() * 80;
+            this.effects.push({
+                type: 'particle',
+                x,
+                y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 0.3, // seconds
+                maxLife: 0.3,
+                color: i % 2 === 0 ? '#ffff66' : '#ff4444',
+            });
+        }
+    }
+    
+    updateEffects(dtSeconds) {
+        const gravity = 600;
+        this.effects.forEach(effect => {
+            effect.life -= dtSeconds;
+            if (effect.type === 'particle') {
+                effect.vy += gravity * dtSeconds * 0.5;
+                effect.x += effect.vx * dtSeconds;
+                effect.y += effect.vy * dtSeconds;
+            }
+        });
+        this.effects = this.effects.filter(e => e.life > 0);
+    }
+    
+    renderEffects() {
+        this.effects.forEach(effect => {
+            const alpha = Math.max(0, effect.life / effect.maxLife);
+            if (effect.type === 'particle') {
+                this.ctx.save();
+                this.ctx.globalAlpha = alpha;
+                this.ctx.fillStyle = effect.color;
+                this.ctx.beginPath();
+                this.ctx.arc(effect.x, effect.y, 4, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+        });
+    }
+    
+    playHitSound() {
+        try {
+            if (!this.audioCtx) {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const ctx = this.audioCtx;
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'square';
+            o.frequency.value = 220 + Math.random() * 60;
+            g.gain.value = 0.05;
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start();
+            setTimeout(() => { o.stop(); }, 100);
+        } catch (_) {
+            // ignore audio errors
+        }
     }
     
     checkGameOver() {
@@ -125,16 +251,33 @@ class Game {
     }
     
     endGame(winner) {
+        if (this.gameState === 'gameOver') return;
         this.gameState = 'gameOver';
         this.gameMessage.innerHTML = `
             <div>${winner}</div>
-            <button onclick="game.restart()">Play Again</button>
+            <button onclick="game.restart(true)">Play Again</button>
             <button onclick="game.resetGame()">New Game</button>
         `;
         this.gameMessage.classList.remove('hidden');
     }
     
-    restart() {
+    togglePause() {
+        if (this.gameState === 'gameOver') return;
+        if (this.gameState === 'paused') {
+            this.gameState = 'playing';
+            this.gameMessage.classList.add('hidden');
+        } else if (this.gameState === 'playing') {
+            this.gameState = 'paused';
+            this.gameMessage.innerHTML = `
+                <div>Paused</div>
+                <button onclick="game.togglePause()">Resume</button>
+                <button onclick="game.resetGame()">Restart</button>
+            `;
+            this.gameMessage.classList.remove('hidden');
+        }
+    }
+    
+    restart(incrementRound = true) {
         this.player1.health = 100;
         this.player2.health = 100;
         this.player1.x = 200;
@@ -145,18 +288,29 @@ class Game {
         this.player1.velocityY = 0;
         this.player2.velocityX = 0;
         this.player2.velocityY = 0;
+        this.player1.isBlocking = false;
+        this.player2.isBlocking = false;
+        this.player1.stunUntil = 0;
+        this.player2.stunUntil = 0;
+        this.timeRemainingSeconds = this.roundDurationSeconds;
+        if (incrementRound) this.round += 1;
+        this.effects = [];
         this.gameState = 'playing';
         this.gameMessage.classList.add('hidden');
     }
     
     resetGame() {
-        this.restart();
         this.round = 1;
+        this.restart(false);
     }
     
     updateUI() {
         this.player1HealthBar.style.width = Math.max(0, this.player1.health) + '%';
         this.player2HealthBar.style.width = Math.max(0, this.player2.health) + '%';
+        if (this.roundInfoEl) {
+            const time = Math.ceil(this.timeRemainingSeconds);
+            this.roundInfoEl.textContent = `Round ${this.round} — ${time}s`;
+        }
     }
     
     render() {
@@ -172,6 +326,9 @@ class Game {
         // Draw players
         this.player1.render(this.ctx);
         this.player2.render(this.ctx);
+        
+        // Draw effects on top
+        this.renderEffects();
         
         // Draw UI elements on canvas
         this.drawCanvasUI();
@@ -243,6 +400,12 @@ class Player {
         this.gravity = 1500;
         this.onGround = false;
         
+        // Facing and state
+        this.facing = 'right'; // 'left' | 'right'
+        this.isBlocking = false;
+        this.blockSpeedMultiplier = 0.35;
+        this.stunUntil = 0;
+        
         // Combat
         this.lastAttackTime = 0;
         this.attackCooldown = 500;
@@ -250,8 +413,17 @@ class Player {
         this.attackDuration = 200;
     }
     
-    update(deltaTime, keys, platforms) {
+    update(deltaTime, keys, platforms, opponent) {
         const dt = deltaTime / 1000; // Convert to seconds
+        
+        // Update facing based on opponent position if not moving
+        if (opponent) {
+            if (opponent.x + opponent.width / 2 > this.x + this.width / 2) {
+                this.facing = 'right';
+            } else {
+                this.facing = 'left';
+            }
+        }
         
         // Handle input
         this.handleInput(keys, dt);
@@ -276,21 +448,45 @@ class Player {
     }
     
     handleInput(keys, dt) {
+        const now = Date.now();
+        const stunned = now < this.stunUntil;
+        
         this.velocityX = 0;
+        this.isBlocking = false;
         
         if (this.id === 'player1') {
-            // Player 1 controls (WASD)
-            if (keys.KeyA) this.velocityX = -this.speed;
-            if (keys.KeyD) this.velocityX = this.speed;
-            if (keys.KeyW && this.onGround) {
+            // Player 1 controls (WASD + S for block)
+            const left = keys.KeyA;
+            const right = keys.KeyD;
+            const jump = keys.KeyW;
+            const block = keys.KeyS;
+            
+            if (block && this.onGround && !stunned) {
+                this.isBlocking = true;
+            }
+            
+            const currentSpeed = this.isBlocking ? this.speed * this.blockSpeedMultiplier : this.speed;
+            if (left && !stunned) this.velocityX = -currentSpeed;
+            if (right && !stunned) this.velocityX = currentSpeed;
+            if (jump && this.onGround && !this.isBlocking && !stunned) {
                 this.velocityY = -this.jumpPower;
                 this.onGround = false;
             }
         } else {
-            // Player 2 controls (Arrow keys)
-            if (keys.ArrowLeft) this.velocityX = -this.speed;
-            if (keys.ArrowRight) this.velocityX = this.speed;
-            if (keys.ArrowUp && this.onGround) {
+            // Player 2 controls (Arrow keys + ArrowDown for block)
+            const left = keys.ArrowLeft;
+            const right = keys.ArrowRight;
+            const jump = keys.ArrowUp;
+            const block = keys.ArrowDown;
+            
+            if (block && this.onGround && !stunned) {
+                this.isBlocking = true;
+            }
+            
+            const currentSpeed = this.isBlocking ? this.speed * this.blockSpeedMultiplier : this.speed;
+            if (left && !stunned) this.velocityX = -currentSpeed;
+            if (right && !stunned) this.velocityX = currentSpeed;
+            if (jump && this.onGround && !this.isBlocking && !stunned) {
                 this.velocityY = -this.jumpPower;
                 this.onGround = false;
             }
@@ -330,7 +526,9 @@ class Player {
     }
     
     canAttack() {
-        return Date.now() - this.lastAttackTime > this.attackCooldown;
+        const now = Date.now();
+        const stunned = now < this.stunUntil;
+        return !this.isBlocking && !stunned && (now - this.lastAttackTime > this.attackCooldown);
     }
     
     attack() {
@@ -348,6 +546,21 @@ class Player {
         this.health = Math.max(0, this.health - amount);
     }
     
+    startStun(ms) {
+        this.stunUntil = Math.max(this.stunUntil, Date.now() + ms);
+    }
+    
+    applyKnockback(direction, kbX, kbY) {
+        const dirX = direction === 'right' ? 1 : -1;
+        this.velocityX = dirX * kbX;
+        this.velocityY = -Math.abs(kbY);
+        this.onGround = false;
+    }
+    
+    getFacingDirectionRelativeTo(other) {
+        return (other.x + other.width / 2) > (this.x + this.width / 2) ? 'right' : 'left';
+    }
+    
     render(ctx) {
         ctx.save();
         
@@ -355,6 +568,9 @@ class Player {
         ctx.fillStyle = this.color;
         if (this.isAttacking) {
             ctx.fillStyle = '#ffff00'; // Flash yellow when attacking
+        }
+        if (this.isBlocking) {
+            ctx.fillStyle = '#999999'; // Gray when blocking
         }
         ctx.fillRect(this.x, this.y, this.width, this.height);
         
@@ -369,11 +585,22 @@ class Player {
         ctx.fillRect(this.x + 19, this.y + 8, 3, 3); // Right eye
         ctx.fillRect(this.x + 10, this.y + 18, 10, 2); // Mouth
         
-        // Draw attack indicator
+        // Draw attack indicator (directional)
         if (this.isAttacking) {
-            ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
-            const attackRange = 30;
-            ctx.fillRect(this.x - attackRange/2, this.y, this.width + attackRange, this.height);
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+            const attackRange = 50;
+            const hx = this.facing === 'right' ? this.x + this.width : this.x - attackRange;
+            ctx.fillRect(hx, this.y - 10, attackRange, this.height + 20);
+        }
+        
+        // Draw block indicator (shield)
+        if (this.isBlocking) {
+            ctx.strokeStyle = '#66ccff';
+            ctx.lineWidth = 3;
+            const shieldX = this.facing === 'right' ? this.x + this.width + 4 : this.x - 14;
+            ctx.beginPath();
+            ctx.arc(shieldX, this.y + this.height / 2, 10, Math.PI / 2, -Math.PI / 2, this.facing === 'left');
+            ctx.stroke();
         }
         
         ctx.restore();
