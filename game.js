@@ -5,6 +5,8 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.width = this.canvas.width;
         this.height = this.canvas.height;
+        this.resizeCanvasForDPR();
+        window.addEventListener('resize', () => this.resizeCanvasForDPR());
         
         // Game state
         this.gameState = 'playing'; // 'playing', 'paused', 'gameOver'
@@ -30,6 +32,7 @@ class Game {
         
         // Simple audio context for hit sounds (lazy-init)
         this.audioCtx = null;
+        this.audioMuted = false;
         
         // Controls
         this.keys = {};
@@ -45,6 +48,9 @@ class Game {
         this.player2HealthBar = document.getElementById('player2-health');
         this.gameMessage = document.getElementById('game-message');
         this.roundInfoEl = document.querySelector('.round-info');
+        
+        // Touch controls (auto-enable on touch devices)
+        this.setupTouchControls();
     }
     
     setupControls() {
@@ -58,10 +64,62 @@ class Game {
             if (e.code === 'Escape') {
                 this.togglePause();
             }
+            // Toggle mute
+            if (e.code === 'KeyM') {
+                this.audioMuted = !this.audioMuted;
+            }
         });
         
         window.addEventListener('keyup', (e) => {
             this.keys[e.code] = false;
+        });
+        
+        // Release keys when window loses focus
+        window.addEventListener('blur', () => {
+            this.keys = {};
+        });
+        
+        // Disable context menu (better mobile experience)
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    resizeCanvasForDPR() {
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const cssWidth = this.canvas.width;
+        const cssHeight = this.canvas.height;
+        this.canvas.width = Math.round(cssWidth * devicePixelRatio);
+        this.canvas.height = Math.round(cssHeight * devicePixelRatio);
+        this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        this.width = cssWidth;
+        this.height = cssHeight;
+    }
+
+    setupTouchControls() {
+        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const controls = document.getElementById('touch-controls');
+        if (!controls) return;
+        if (!isTouch) {
+            controls.classList.add('hidden');
+            return;
+        }
+        controls.classList.remove('hidden');
+        const buttons = Array.from(controls.querySelectorAll('.tc-btn'));
+        const handleStart = (e) => {
+            e.preventDefault();
+            const button = e.currentTarget;
+            const code = button.getAttribute('data-key');
+            this.keys[code] = true;
+        };
+        const handleEnd = (e) => {
+            e.preventDefault();
+            const button = e.currentTarget;
+            const code = button.getAttribute('data-key');
+            this.keys[code] = false;
+        };
+        buttons.forEach(btn => {
+            btn.addEventListener('touchstart', handleStart, { passive: false });
+            btn.addEventListener('touchend', handleEnd, { passive: false });
+            btn.addEventListener('touchcancel', handleEnd, { passive: false });
         });
     }
     
@@ -223,6 +281,7 @@ class Game {
     }
     
     playHitSound() {
+        if (this.audioMuted) return;
         try {
             if (!this.audioCtx) {
                 this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();

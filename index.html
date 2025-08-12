@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Fighting Game</title>
+    <title>Browser Brawl</title>
+    <meta name="description" content="Fast-paced 2D browser brawler with local multiplayer, touch controls, and crisp canvas rendering.">
+    <meta name="theme-color" content="#1a1a2d">
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -38,7 +40,24 @@
         <div id="game-message" class="game-message hidden"></div>
         <div class="controls" style="margin-top: 10px; justify-content:center;">
             <div class="control-section" style="flex:0 0 auto;">
-                <p>Pause/Resume: Esc</p>
+                <p>Pause/Resume: Esc | Mute: M</p>
+            </div>
+        </div>
+        <!-- Touch controls (shown automatically on touch devices) -->
+        <div id="touch-controls" class="touch-controls hidden">
+            <div class="tc-row">
+                <button class="tc-btn" data-key="KeyA">◀</button>
+                <button class="tc-btn" data-key="KeyD">▶</button>
+                <button class="tc-btn" data-key="KeyW">⤴</button>
+                <button class="tc-btn" data-key="KeyS">🛡</button>
+                <button class="tc-btn" data-key="Space">⚔</button>
+            </div>
+            <div class="tc-row">
+                <button class="tc-btn" data-key="ArrowLeft">◀</button>
+                <button class="tc-btn" data-key="ArrowRight">▶</button>
+                <button class="tc-btn" data-key="ArrowUp">⤴</button>
+                <button class="tc-btn" data-key="ArrowDown">🛡</button>
+                <button class="tc-btn" data-key="Enter">⚔</button>
             </div>
         </div>
     </div>
