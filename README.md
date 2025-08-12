@@ -1,14 +1,38 @@
-# Run and deploy your AI Studio app
+# Browser Brawl
 
-This contains everything you need to run your app locally.
+A simple browser-based 2D fighting game rendered on an HTML5 Canvas. Local multiplayer on one keyboard, with optional touch controls for mobile.
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  Node.js
+Prerequisite: Node.js 18+
 
+```bash
+npm install
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Then open `http://localhost:3000`.
+
+## Controls
+
+- Player 1 (Red):
+  - Move: A / D
+  - Jump: W
+  - Block: S
+  - Attack: Space
+- Player 2 (Blue):
+  - Move: ← / →
+  - Jump: ↑
+  - Block: ↓
+  - Attack: Enter
+- Global:
+  - Pause/Resume: Esc
+  - Mute: M
+
+Touch devices show on-screen controls automatically.
+
+## Deploy
+
+This repo includes a `Dockerfile` and a `cloudbuild.yaml` to deploy to Cloud Run.
+- Local container run: `docker build -t browser-brawl . && docker run -p 8080:8080 browser-brawl`
+- Cloud Run (via Cloud Build): configure `gcloud` and run the provided pipeline.

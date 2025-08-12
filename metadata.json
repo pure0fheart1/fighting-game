@@ -1,6 +1,6 @@
 {
   "name": "Browser Fighting Game",
-  "description": "A browser-based fighting game inspired by Tekken and Street Fighter, built with Phaser.",
+  "description": "A browser-based fighting game inspired by classic brawlers, built with HTML5 Canvas.",
   "requestFramePermissions": [],
   "prompt": ""
 }
