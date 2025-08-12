@@ -7,11 +7,14 @@ class Game {
         this.height = this.canvas.height;
         
         // Game state
-        this.gameState = 'playing'; // 'playing', 'paused', 'gameOver'
+        this.gameState = 'playing'; // 'playing', 'paused', 'roundOver', 'matchOver'
         this.round = 1;
+        this.bestOf = 3;
+        this.winsToWinMatch = Math.ceil(this.bestOf / 2);
+        this.p1Wins = 0;
+        this.p2Wins = 0;
         this.roundDurationSeconds = 60;
         this.timeRemainingSeconds = this.roundDurationSeconds;
-        this.gameTime = 99; // legacy; not used directly anymore
         
         // Platform setup
         this.platforms = [
@@ -25,6 +28,10 @@ class Game {
         this.player1 = new Player(200, 500, '#ff4444', 'player1');
         this.player2 = new Player(600, 500, '#4444ff', 'player2');
         
+        // CPU opponent
+        this.aiEnabled = true; // Player 2 controlled by CPU by default
+        this.aiKeys = {}; // virtual key map used when AI is enabled
+        
         // Effects (particles, flashes)
         this.effects = [];
         
@@ -34,6 +41,8 @@ class Game {
         // Controls
         this.keys = {};
         this.setupControls();
+        this.setupTouchControls();
+        this.setupUiControls();
         
         // Start game loop
         this.lastTime = 0;
@@ -45,6 +54,11 @@ class Game {
         this.player2HealthBar = document.getElementById('player2-health');
         this.gameMessage = document.getElementById('game-message');
         this.roundInfoEl = document.querySelector('.round-info');
+        this.p1WinsEl = document.getElementById('p1-wins');
+        this.p2WinsEl = document.getElementById('p2-wins');
+        this.cpuToggleBtn = document.getElementById('cpu-toggle');
+        
+        this.updateUI();
     }
     
     setupControls() {
@@ -64,6 +78,42 @@ class Game {
             this.keys[e.code] = false;
         });
     }
+
+    setupUiControls() {
+        if (this.cpuToggleBtn) {
+            this.cpuToggleBtn.addEventListener('click', () => this.toggleAI());
+        }
+    }
+
+    setupTouchControls() {
+        const bindButton = (id, pressCodes) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const press = (ev) => {
+                ev.preventDefault();
+                pressCodes.forEach(code => this.setKey(code, true));
+            };
+            const release = (ev) => {
+                ev.preventDefault();
+                pressCodes.forEach(code => this.setKey(code, false));
+            };
+            el.addEventListener('touchstart', press, { passive: false });
+            el.addEventListener('touchend', release, { passive: false });
+            el.addEventListener('mousedown', press);
+            el.addEventListener('mouseup', release);
+            el.addEventListener('mouseleave', release);
+        };
+        // Mobile controls control Player 1
+        bindButton('btn-left', ['KeyA']);
+        bindButton('btn-right', ['KeyD']);
+        bindButton('btn-jump', ['KeyW']);
+        bindButton('btn-block', ['KeyS']);
+        bindButton('btn-attack', ['Space']);
+    }
+
+    setKey(code, isPressed) {
+        this.keys[code] = isPressed;
+    }
     
     gameLoop(currentTime) {
         const deltaTime = this.lastTime === 0 ? 16 : (currentTime - this.lastTime);
@@ -81,9 +131,14 @@ class Game {
         // deltaTime in ms
         const dtSeconds = deltaTime / 1000;
         
+        // Update inputs for CPU if enabled
+        if (this.aiEnabled) {
+            this.computeAI();
+        }
+        
         // Update players
         this.player1.update(deltaTime, this.keys, this.platforms, this.player2);
-        this.player2.update(deltaTime, this.keys, this.platforms, this.player1);
+        this.player2.update(deltaTime, this.aiEnabled ? this.aiKeys : this.keys, this.platforms, this.player1);
         
         // Handle attacks
         this.handleAttacks();
@@ -96,24 +151,69 @@ class Game {
         if (this.timeRemainingSeconds <= 0) {
             // Time up: determine winner by health
             if (this.player1.health === this.player2.health) {
-                this.endGame('Draw!');
+                this.endRound('draw');
             } else if (this.player1.health > this.player2.health) {
-                this.endGame('Time! Player 1 Wins!');
+                this.endRound('player1');
             } else {
-                this.endGame('Time! Player 2 Wins!');
+                this.endRound('player2');
             }
         }
         
-        // Check for game over (health)
-        this.checkGameOver();
+        // Check for round end (health)
+        if (this.player1.health <= 0) {
+            this.endRound('player2');
+        } else if (this.player2.health <= 0) {
+            this.endRound('player1');
+        }
         
         // Update UI
         this.updateUI();
     }
     
+    computeAI() {
+        // Simple heuristic AI for Player 2
+        const ai = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false, Enter: false };
+        const me = this.player2;
+        const opp = this.player1;
+
+        const now = Date.now();
+        const stunned = now < me.stunUntil;
+        const horizontalCenterMe = me.x + me.width / 2;
+        const horizontalCenterOpp = opp.x + opp.width / 2;
+        const dx = horizontalCenterOpp - horizontalCenterMe;
+        const absDx = Math.abs(dx);
+        const verticalDiff = Math.abs((opp.y + opp.height/2) - (me.y + me.height/2));
+        const desiredRange = 40; // target melee range
+        const inRange = absDx < 50 && verticalDiff < 60;
+
+        if (!stunned) {
+            // Defensive: if opponent is attacking and close, block
+            if (opp.isAttacking && absDx < 80 && me.onGround) {
+                ai.ArrowDown = true;
+            }
+            // Movement toward/away
+            if (!ai.ArrowDown) {
+                if (absDx > desiredRange + 10) {
+                    if (dx > 0) ai.ArrowRight = true; else ai.ArrowLeft = true;
+                } else if (absDx < desiredRange - 10) {
+                    if (dx > 0) ai.ArrowLeft = true; else ai.ArrowRight = true;
+                }
+            }
+            // Try to align vertically: if opponent is significantly higher, try a jump
+            if (me.onGround && opp.y + opp.height/2 < me.y && verticalDiff > 40) {
+                ai.ArrowUp = true;
+            }
+            // Attack when in range and off cooldown
+            if (inRange && me.canAttack() && !ai.ArrowDown) {
+                ai.Enter = true;
+            }
+        }
+        this.aiKeys = ai;
+    }
+    
     handleAttacks() {
-        const tryAttack = (attacker, target, attackKey) => {
-            if (this.keys[attackKey] && attacker.canAttack()) {
+        const tryAttack = (attacker, target, attackKey, keySet) => {
+            if (keySet[attackKey] && attacker.canAttack()) {
                 attacker.attack();
                 if (this.isPlayerInRange(attacker, target)) {
                     // Damage calculation with blocking
@@ -140,9 +240,9 @@ class Game {
         };
         
         // Player 1 attack (Space)
-        tryAttack(this.player1, this.player2, 'Space');
+        tryAttack(this.player1, this.player2, 'Space', this.keys);
         // Player 2 attack (Enter)
-        tryAttack(this.player2, this.player1, 'Enter');
+        tryAttack(this.player2, this.player1, 'Enter', this.aiEnabled ? this.aiKeys : this.keys);
     }
     
     isPlayerInRange(attacker, target) {
@@ -242,27 +342,43 @@ class Game {
         }
     }
     
-    checkGameOver() {
-        if (this.player1.health <= 0) {
-            this.endGame('Player 2 Wins!');
-        } else if (this.player2.health <= 0) {
-            this.endGame('Player 1 Wins!');
+    endRound(winner) {
+        if (this.gameState === 'roundOver' || this.gameState === 'matchOver') return;
+        this.gameState = 'roundOver';
+
+        let message = '';
+        if (winner === 'player1') {
+            this.p1Wins += 1;
+            message = 'Player 1 Wins the Round!';
+        } else if (winner === 'player2') {
+            this.p2Wins += 1;
+            message = 'Player 2 Wins the Round!';
+        } else {
+            message = 'Draw!';
         }
-    }
-    
-    endGame(winner) {
-        if (this.gameState === 'gameOver') return;
-        this.gameState = 'gameOver';
-        this.gameMessage.innerHTML = `
-            <div>${winner}</div>
-            <button onclick="game.restart(true)">Play Again</button>
-            <button onclick="game.resetGame()">New Game</button>
-        `;
+
+        const matchWonBy = this.p1Wins >= this.winsToWinMatch ? 'player1' : (this.p2Wins >= this.winsToWinMatch ? 'player2' : null);
+
+        if (matchWonBy) {
+            const who = matchWonBy === 'player1' ? 'Player 1' : 'Player 2';
+            this.gameMessage.innerHTML = `
+                <div>${message}<br/>Match Over — ${who} Wins!</div>
+                <button onclick="game.resetMatch()">New Match</button>
+            `;
+            this.gameState = 'matchOver';
+        } else {
+            this.gameMessage.innerHTML = `
+                <div>${message}</div>
+                <button onclick="game.nextRound()">Next Round</button>
+                <button onclick="game.resetMatch()">New Match</button>
+            `;
+        }
         this.gameMessage.classList.remove('hidden');
+        this.updateUI();
     }
     
     togglePause() {
-        if (this.gameState === 'gameOver') return;
+        if (this.gameState === 'matchOver' || this.gameState === 'roundOver') return;
         if (this.gameState === 'paused') {
             this.gameState = 'playing';
             this.gameMessage.classList.add('hidden');
@@ -271,13 +387,18 @@ class Game {
             this.gameMessage.innerHTML = `
                 <div>Paused</div>
                 <button onclick="game.togglePause()">Resume</button>
-                <button onclick="game.resetGame()">Restart</button>
+                <button onclick="game.resetMatch()">Restart Match</button>
             `;
             this.gameMessage.classList.remove('hidden');
         }
     }
     
-    restart(incrementRound = true) {
+    nextRound() {
+        this.round += 1;
+        this.restartRound();
+    }
+
+    restartRound() {
         this.player1.health = 100;
         this.player2.health = 100;
         this.player1.x = 200;
@@ -293,15 +414,17 @@ class Game {
         this.player1.stunUntil = 0;
         this.player2.stunUntil = 0;
         this.timeRemainingSeconds = this.roundDurationSeconds;
-        if (incrementRound) this.round += 1;
         this.effects = [];
         this.gameState = 'playing';
         this.gameMessage.classList.add('hidden');
+        this.updateUI();
     }
     
-    resetGame() {
+    resetMatch() {
         this.round = 1;
-        this.restart(false);
+        this.p1Wins = 0;
+        this.p2Wins = 0;
+        this.restartRound();
     }
     
     updateUI() {
@@ -310,6 +433,12 @@ class Game {
         if (this.roundInfoEl) {
             const time = Math.ceil(this.timeRemainingSeconds);
             this.roundInfoEl.textContent = `Round ${this.round} — ${time}s`;
+        }
+        if (this.p1WinsEl) this.p1WinsEl.textContent = String(this.p1Wins);
+        if (this.p2WinsEl) this.p2WinsEl.textContent = String(this.p2Wins);
+        if (this.cpuToggleBtn) {
+            this.cpuToggleBtn.setAttribute('aria-pressed', this.aiEnabled ? 'true' : 'false');
+            this.cpuToggleBtn.textContent = `CPU: ${this.aiEnabled ? 'On' : 'Off'}`;
         }
     }
     
@@ -376,6 +505,15 @@ class Game {
         this.ctx.font = '20px "Press Start 2P"';
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`Round ${this.round}`, this.width / 2, 40);
+    }
+
+    toggleAI() {
+        this.aiEnabled = !this.aiEnabled;
+        // Clear any AI input when disabling
+        if (!this.aiEnabled) {
+            this.aiKeys = {};
+        }
+        this.updateUI();
     }
 }
 

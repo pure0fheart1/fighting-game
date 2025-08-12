@@ -30,8 +30,52 @@ h1 {
     text-align: center;
     color: #ffdd00;
     text-shadow: 3px 3px 0px #000;
-    margin: 0 0 20px 0;
+    margin: 0 0 12px 0;
     font-size: 32px;
+}
+
+.top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding: 0 8px;
+}
+
+.scoreboard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #ffdd00;
+}
+
+.scoreboard .score-row {
+    display: flex;
+    gap: 16px;
+    font-size: 14px;
+}
+
+.scoreboard .best-of {
+    font-size: 12px;
+    color: #ddd07a;
+}
+
+.btn {
+    background: #333;
+    color: white;
+    border: 2px solid #666;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-family: "Press Start 2P", monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background: #555;
+    border-color: #888;
 }
 
 .ui-top {
@@ -151,6 +195,13 @@ h1 {
     border-color: #888;
 }
 
+.mobile-controls {
+    display: none;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+}
+
 @media (max-width: 900px) {
     .game-wrapper {
         padding: 15px;
@@ -164,5 +215,22 @@ h1 {
     .controls {
         flex-direction: column;
         gap: 10px;
+    }
+
+    .mobile-controls {
+        display: flex;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .health-fill,
+    .btn,
+    .game-message button {
+        transition: none !important;
     }
 }
