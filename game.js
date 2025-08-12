@@ -45,6 +45,9 @@ class Game {
         this.player2HealthBar = document.getElementById('player2-health');
         this.gameMessage = document.getElementById('game-message');
         this.roundInfoEl = document.querySelector('.round-info');
+        // ARIA progressbars (containers)
+        this.player1HealthBarContainer = document.getElementById('player1-healthbar');
+        this.player2HealthBarContainer = document.getElementById('player2-healthbar');
     }
     
     setupControls() {
@@ -57,6 +60,12 @@ class Game {
             // Pause/Resume
             if (e.code === 'Escape') {
                 this.togglePause();
+            }
+            // Restart current round (without increment)
+            if (e.code === 'KeyR') {
+                if (this.gameState !== 'gameOver') {
+                    this.restart(false);
+                }
             }
         });
         
@@ -85,6 +94,9 @@ class Game {
         this.player1.update(deltaTime, this.keys, this.platforms, this.player2);
         this.player2.update(deltaTime, this.keys, this.platforms, this.player1);
         
+        // Prevent players from overlapping unrealistically
+        this.resolvePlayerCollision(this.player1, this.player2);
+        
         // Handle attacks
         this.handleAttacks();
         
@@ -109,6 +121,27 @@ class Game {
         
         // Update UI
         this.updateUI();
+    }
+    
+    resolvePlayerCollision(a, b) {
+        const aRight = a.x + a.width;
+        const bRight = b.x + b.width;
+        const overlapX = Math.min(aRight, bRight) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+        if (overlapX > 0 && overlapY > 0) {
+            // Separate along X axis only
+            const mid = (Math.max(a.x, b.x) + Math.min(aRight, bRight)) / 2;
+            if (a.x < b.x) {
+                a.x = Math.max(0, Math.min(this.width - a.width, mid - a.width));
+                b.x = Math.max(0, Math.min(this.width - b.width, mid));
+            } else {
+                b.x = Math.max(0, Math.min(this.width - b.width, mid - b.width));
+                a.x = Math.max(0, Math.min(this.width - a.width, mid));
+            }
+            // Damp horizontal velocities to reduce jitter
+            a.velocityX *= 0.2;
+            b.velocityX *= 0.2;
+        }
     }
     
     handleAttacks() {
@@ -307,6 +340,14 @@ class Game {
     updateUI() {
         this.player1HealthBar.style.width = Math.max(0, this.player1.health) + '%';
         this.player2HealthBar.style.width = Math.max(0, this.player2.health) + '%';
+        if (this.player1HealthBarContainer) {
+            this.player1HealthBarContainer.setAttribute('aria-valuenow', String(Math.max(0, this.player1.health)));
+            this.player1HealthBarContainer.setAttribute('aria-valuetext', `${Math.max(0, this.player1.health)} percent`);
+        }
+        if (this.player2HealthBarContainer) {
+            this.player2HealthBarContainer.setAttribute('aria-valuenow', String(Math.max(0, this.player2.health)));
+            this.player2HealthBarContainer.setAttribute('aria-valuetext', `${Math.max(0, this.player2.health)} percent`);
+        }
         if (this.roundInfoEl) {
             const time = Math.ceil(this.timeRemainingSeconds);
             this.roundInfoEl.textContent = `Round ${this.round} — ${time}s`;
