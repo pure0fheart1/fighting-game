@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browser Brawl is a fast, arcade-style 2D fighting game built with HTML5 Canvas. Play locally with two players on one keyboard.">
+    <meta name="theme-color" content="#1a1a2d">
     <title>Browser Fighting Game</title>
     <link rel="stylesheet" href="index.css">
 </head>
@@ -11,14 +13,14 @@
         <h1>Browser Brawl</h1>
         <div class="ui-top">
             <div class="player-info">
-                <div class="health-bar">
+                <div class="health-bar" id="player1-healthbar" role="progressbar" aria-label="Player 1 Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
                     <div class="health-fill" id="player1-health"></div>
                 </div>
                 <span>Player 1</span>
             </div>
-            <div class="round-info">Round 1</div>
+            <div class="round-info" role="timer" aria-live="polite">Round 1</div>
             <div class="player-info">
-                <div class="health-bar">
+                <div class="health-bar" id="player2-healthbar" role="progressbar" aria-label="Player 2 Health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
                     <div class="health-fill" id="player2-health"></div>
                 </div>
                 <span>Player 2</span>
@@ -35,10 +37,10 @@
                 <p>Move: ←/→ | Jump: ↑ | Block: ↓ | Attack: Enter</p>
             </div>
         </div>
-        <div id="game-message" class="game-message hidden"></div>
+        <div id="game-message" class="game-message hidden" role="dialog" aria-live="assertive" aria-modal="true"></div>
         <div class="controls" style="margin-top: 10px; justify-content:center;">
             <div class="control-section" style="flex:0 0 auto;">
-                <p>Pause/Resume: Esc</p>
+                <p>Pause/Resume: Esc | Restart Round: R</p>
             </div>
         </div>
     </div>
