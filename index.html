@@ -3,12 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browser Brawl: a simple 2D browser fighting game playable on desktop and mobile.">
+    <meta name="theme-color" content="#16213e">
     <title>Browser Fighting Game</title>
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
     <div class="game-wrapper">
         <h1>Browser Brawl</h1>
+
+        <div class="top-controls">
+            <div class="scoreboard" aria-live="polite">
+                <div class="score-row">
+                    <span>Player 1 Wins: <span id="p1-wins">0</span></span>
+                    <span>Player 2 Wins: <span id="p2-wins">0</span></span>
+                </div>
+                <div class="best-of">Best of 3</div>
+            </div>
+            <button id="cpu-toggle" class="btn" type="button" aria-pressed="true" title="Toggle CPU opponent for Player 2">CPU: On</button>
+        </div>
+
         <div class="ui-top">
             <div class="player-info">
                 <div class="health-bar">
@@ -24,7 +38,9 @@
                 <span>Player 2</span>
             </div>
         </div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <canvas id="gameCanvas" width="800" height="600" role="img" aria-label="Game canvas"></canvas>
+
         <div class="controls">
             <div class="control-section">
                 <h3>Player 1 (Red)</h3>
@@ -35,13 +51,21 @@
                 <p>Move: ←/→ | Jump: ↑ | Block: ↓ | Attack: Enter</p>
             </div>
         </div>
-        <div id="game-message" class="game-message hidden"></div>
+        <div id="game-message" class="game-message hidden" role="dialog" aria-modal="true"></div>
         <div class="controls" style="margin-top: 10px; justify-content:center;">
             <div class="control-section" style="flex:0 0 auto;">
                 <p>Pause/Resume: Esc</p>
             </div>
         </div>
+
+        <div class="mobile-controls" aria-label="Mobile controls">
+            <button id="btn-left" class="btn" type="button" aria-label="Move left">←</button>
+            <button id="btn-right" class="btn" type="button" aria-label="Move right">→</button>
+            <button id="btn-jump" class="btn" type="button" aria-label="Jump">Jump</button>
+            <button id="btn-block" class="btn" type="button" aria-label="Block">Block</button>
+            <button id="btn-attack" class="btn" type="button" aria-label="Attack">Attack</button>
+        </div>
     </div>
-    <script src="game.js"></script>
+    <script src="game.js" defer></script>
 </body>
 </html>
